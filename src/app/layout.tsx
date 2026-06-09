@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FreeBite SF | Free and affordable food in San Francisco",
+  title: "FreeBite SF | Find free, cheap, and nearby food",
   description:
-    "Find food pantries, free meals, community fridges, student resources, and low-cost food options in San Francisco.",
+    "Find free food resources and live nearby restaurants, cafes, and markets across San Francisco.",
 };
 
 export default function RootLayout({
