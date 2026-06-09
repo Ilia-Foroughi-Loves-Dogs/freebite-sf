@@ -1,6 +1,9 @@
+import { useState } from "react";
+
 import { ArrowIcon, CheckIcon, LocationIcon } from "@/components/icons";
 import {
   getDirectionsUrl,
+  type CheapMenuItem,
   type FoodResource,
   type ResourceCategory,
 } from "@/data/resources";
@@ -14,14 +17,20 @@ const categoryStyles: Record<ResourceCategory, string> = {
 };
 
 type ResourceCardProps = {
+  onMenuUpdate: (
+    resourceId: string,
+    result: Partial<FoodResource>,
+  ) => void;
   openStatus: boolean | null;
   resource: FoodResource;
 };
 
 export function ResourceCard({
+  onMenuUpdate,
   openStatus,
   resource,
 }: ResourceCardProps) {
+  const [isCheckingMenu, setIsCheckingMenu] = useState(false);
   const verifiedDate = new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeZone: "UTC",
@@ -33,6 +42,53 @@ export function ResourceCard({
       : openStatus === false
         ? "Closed now"
         : "Hours unknown";
+  const supportsMenuPrices = resource.category === "Nearby food place";
+  const canCheckMenu = supportsMenuPrices && Boolean(resource.menuUrl);
+  const menuCheckedDate = resource.menuLastChecked
+    ? new Intl.DateTimeFormat("en-US", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(resource.menuLastChecked))
+    : null;
+
+  async function checkMenu() {
+    if (!resource.menuUrl) {
+      return;
+    }
+
+    setIsCheckingMenu(true);
+
+    try {
+      const response = await fetch("/api/menu", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: resource.menuUrl }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Menu request failed.");
+      }
+
+      const data = (await response.json()) as {
+        checkedAt: string;
+        items: CheapMenuItem[];
+      };
+
+      onMenuUpdate(resource.id, {
+        cheapestItems: data.items,
+        menuLastChecked: data.checkedAt,
+        menuStatus: data.items.length > 0 ? "found" : "not_found",
+      });
+    } catch {
+      onMenuUpdate(resource.id, {
+        cheapestItems: [],
+        menuLastChecked: new Date().toISOString(),
+        menuStatus: "error",
+      });
+    } finally {
+      setIsCheckingMenu(false);
+    }
+  }
 
   return (
     <article className="flex h-full flex-col rounded-3xl border border-white/10 bg-[#101a18] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.2)] transition hover:border-emerald-300/25 sm:p-7">
@@ -134,21 +190,104 @@ export function ResourceCard({
         </div>
       </dl>
 
+      {supportsMenuPrices &&
+        (canCheckMenu || resource.cheapestItems?.length || resource.menuStatus) && (
+        <div className="mb-5 border-t border-white/10 pt-5">
+          {resource.cheapestItems && resource.cheapestItems.length > 0 ? (
+            <div>
+              <p className="text-sm font-semibold text-white">
+                Cheapest items found online
+              </p>
+              <ul className="mt-3 space-y-3">
+                {resource.cheapestItems.map((item) => (
+                  <li
+                    className="rounded-xl border border-emerald-300/10 bg-emerald-300/[0.04] px-3 py-2.5 text-sm"
+                    key={`${item.name}-${item.price}-${item.sourceUrl}`}
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="font-medium text-slate-100">
+                        {item.name}
+                      </span>
+                      <span className="font-semibold text-emerald-300">
+                        ${item.price.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                      <a
+                        className="text-emerald-200 underline decoration-emerald-300/40 underline-offset-2 hover:text-emerald-100"
+                        href={item.sourceUrl}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        Source
+                      </a>
+                      <span className="text-amber-200">
+                        Verify before going
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-xs leading-5 text-slate-500">
+                Prices may be outdated. Verify before going.
+                {menuCheckedDate && ` Last checked ${menuCheckedDate}.`}
+              </p>
+            </div>
+          ) : resource.menuStatus === "not_found" ? (
+            <p className="text-sm text-slate-300">
+              No menu prices found online.
+              {menuCheckedDate && (
+                <span className="mt-1 block text-xs text-slate-500">
+                  Last checked {menuCheckedDate}.
+                </span>
+              )}
+            </p>
+          ) : resource.menuStatus === "error" ? (
+            <p className="text-sm text-rose-200">
+              Could not check menu.
+              {menuCheckedDate && (
+                <span className="mt-1 block text-xs text-slate-500">
+                  Last checked {menuCheckedDate}.
+                </span>
+              )}
+            </p>
+          ) : null}
+
+          {canCheckMenu && (
+            <button
+              className="mt-4 inline-flex items-center justify-center rounded-xl border border-emerald-300/25 bg-emerald-300/[0.07] px-4 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-300/[0.12] disabled:cursor-wait disabled:opacity-60"
+              disabled={isCheckingMenu}
+              onClick={() => void checkMenu()}
+              type="button"
+            >
+              {isCheckingMenu
+                ? "Checking menu..."
+                : resource.menuStatus === "not_checked" ||
+                    resource.menuStatus === undefined
+                  ? "Find cheapest items"
+                  : "Check menu again"}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col gap-4 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-slate-500">
           {resource.source === "static" ? "Last verified" : "Loaded"}{" "}
           {verifiedDate}
         </p>
         <div className="flex gap-2">
-          <a
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/15 px-4 py-2.5 text-sm font-semibold text-white hover:border-white/30 hover:bg-white/5 sm:flex-none"
-            href={resource.website}
-            rel="noreferrer"
-            target="_blank"
-          >
-            Details
-            <ArrowIcon />
-          </a>
+          {resource.website && (
+            <a
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/15 px-4 py-2.5 text-sm font-semibold text-white hover:border-white/30 hover:bg-white/5 sm:flex-none"
+              href={resource.website}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Details
+              <ArrowIcon />
+            </a>
+          )}
           <a
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-300 px-4 py-2.5 text-sm font-semibold text-[#07110e] hover:bg-emerald-200 sm:flex-none"
             href={getDirectionsUrl(resource)}

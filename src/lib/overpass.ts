@@ -91,9 +91,39 @@ function inferCost(tags: OsmTags) {
 
 function getWebsite(tags: OsmTags, type: OverpassElement["type"], id: number) {
   return (
-    tags.website ||
-    tags["contact:website"] ||
+    normalizeWebUrl(tags.website) ||
+    normalizeWebUrl(tags["contact:website"]) ||
+    normalizeWebUrl(tags["brand:website"]) ||
     `https://www.openstreetmap.org/${type}/${id}`
+  );
+}
+
+function normalizeWebUrl(value?: string) {
+  if (!value) {
+    return undefined;
+  }
+
+  const candidate = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+
+  try {
+    const url = new URL(candidate);
+    return (url.protocol === "http:" || url.protocol === "https:") &&
+      url.hostname.includes(".")
+      ? url.toString()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function getMenuUrl(tags: OsmTags) {
+  return (
+    normalizeWebUrl(tags["website:menu"]) ||
+    normalizeWebUrl(tags.menu) ||
+    normalizeWebUrl(tags["takeaway:website"]) ||
+    normalizeWebUrl(tags.website) ||
+    normalizeWebUrl(tags["contact:website"]) ||
+    normalizeWebUrl(tags["brand:website"])
   );
 }
 
@@ -227,6 +257,7 @@ export async function fetchNearbyFoodPlaces(
           ? `${tags.shop.replaceAll("_", " ")}`
           : tags.amenity?.replaceAll("_", " ")) ||
         "Unnamed food place";
+      const menuUrl = getMenuUrl(tags);
 
       return [
         {
@@ -248,6 +279,8 @@ export async function fetchNearbyFoodPlaces(
           lng: elementLng,
           tags: getTagLabels(tags),
           source: "osm",
+          menuUrl,
+          menuStatus: menuUrl ? "not_checked" : undefined,
         } satisfies FoodResource,
       ];
     })

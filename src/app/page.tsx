@@ -44,7 +44,18 @@ function matchesFilter(resource: FoodResource, filter: ResourceFilter) {
     return resource.costRank === 0;
   }
 
+  if (filter === "Has menu prices") {
+    return Boolean(resource.cheapestItems?.length);
+  }
+
   return resource.category === categoryFilters[filter];
+}
+
+function getLowestMenuPrice(resource: FoodResource) {
+  return resource.cheapestItems?.reduce(
+    (lowest, item) => Math.min(lowest, item.price),
+    Infinity,
+  ) ?? Infinity;
 }
 
 export default function Home() {
@@ -54,6 +65,9 @@ export default function Home() {
   );
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
   const [liveResources, setLiveResources] = useState<FoodResource[]>([]);
+  const [menuResults, setMenuResults] = useState<
+    Record<string, Partial<FoodResource>>
+  >({});
   const [activeFilter, setActiveFilter] = useState<ResourceFilter>("All");
   const [activeSort, setActiveSort] = useState<SortOption>("Closest");
   const [openNow, setOpenNow] = useState(false);
@@ -125,11 +139,15 @@ export default function Home() {
 
   const displayedResources = useMemo(() => {
     const now = new Date();
-    const combined = [...resources, ...liveResources].map((resource) => ({
-      ...resource,
-      costRank: getCostRank(resource.cost),
-      distanceMiles: calculateDistanceMiles(location, resource),
-    }));
+    const combined = [...resources, ...liveResources].map((resource) => {
+      const enrichedResource = { ...resource, ...menuResults[resource.id] };
+
+      return {
+        ...enrichedResource,
+        costRank: getCostRank(enrichedResource.cost),
+        distanceMiles: calculateDistanceMiles(location, enrichedResource),
+      };
+    });
 
     return combined
       .filter((resource) => matchesFilter(resource, activeFilter))
@@ -153,9 +171,36 @@ export default function Home() {
           return aFreeGroup - bFreeGroup || distanceDifference;
         }
 
+        if (activeSort === "Cheapest menu item") {
+          return (
+            getLowestMenuPrice(a) - getLowestMenuPrice(b) ||
+            distanceDifference
+          );
+        }
+
         return distanceDifference;
       });
-  }, [activeFilter, activeSort, liveResources, location, openNow]);
+  }, [
+    activeFilter,
+    activeSort,
+    liveResources,
+    location,
+    menuResults,
+    openNow,
+  ]);
+
+  const updateMenuResult = useCallback(
+    (resourceId: string, result: Partial<FoodResource>) => {
+      setMenuResults((current) => ({
+        ...current,
+        [resourceId]: {
+          ...current[resourceId],
+          ...result,
+        },
+      }));
+    },
+    [],
+  );
 
   function useMyLocation() {
     if (!navigator.geolocation) {
@@ -367,6 +412,7 @@ export default function Home() {
               {displayedResources.map((resource) => (
                 <ResourceCard
                   key={resource.id}
+                  onMenuUpdate={updateMenuResult}
                   openStatus={getSimpleOpenStatus(resource.hours)}
                   resource={resource}
                 />

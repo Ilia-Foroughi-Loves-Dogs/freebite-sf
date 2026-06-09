@@ -5,6 +5,13 @@ export type ResourceCategory =
   | "Student food resource"
   | "Nearby food place";
 
+export type CheapMenuItem = {
+  name: string;
+  price: number;
+  priceText: string;
+  sourceUrl: string;
+};
+
 export type FoodResource = {
   id: string;
   name: string;
@@ -14,7 +21,7 @@ export type FoodResource = {
   hours: string;
   cost: string;
   eligibility: string;
-  website: string;
+  website?: string;
   phone: string | null;
   lastVerified: string;
   lat: number;
@@ -23,6 +30,10 @@ export type FoodResource = {
   source: "static" | "osm";
   distanceMiles?: number;
   costRank?: number;
+  menuUrl?: string;
+  cheapestItems?: CheapMenuItem[];
+  menuLastChecked?: string;
+  menuStatus?: "not_checked" | "found" | "not_found" | "error";
 };
 
 export const resources: FoodResource[] = [
