@@ -2,10 +2,11 @@ import type { FoodResource } from "@/data/resources";
 import { calculateDistanceMiles } from "@/lib/distance";
 
 const OVERPASS_URLS = [
-  "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass-api.de/api/interpreter",
 ];
-const SEARCH_RADIUS_METERS = 3219;
+const SEARCH_RADIUS_METERS = 3218;
+const REQUEST_TIMEOUT_MS = 12_000;
 const MAX_LIVE_RESULTS = 100;
 
 type OsmTags = Record<string, string>;
@@ -47,7 +48,7 @@ function buildQuery(lat: number, lng: number) {
   `;
 }
 
-function getAddress(tags: OsmTags, lat: number, lng: number) {
+function getAddress(tags: OsmTags) {
   const streetAddress = [tags["addr:housenumber"], tags["addr:street"]]
     .filter(Boolean)
     .join(" ");
@@ -59,37 +60,7 @@ function getAddress(tags: OsmTags, lat: number, lng: number) {
     return [streetAddress, locality].filter(Boolean).join(", ");
   }
 
-  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-}
-
-function inferCost(tags: OsmTags) {
-  const searchable = [
-    tags.name,
-    tags.brand,
-    tags.amenity,
-    tags.shop,
-    tags.cuisine,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  if (
-    tags.fee === "no" ||
-    /\b(free|food bank|food pantry|community fridge)\b/.test(searchable)
-  ) {
-    return "Free";
-  }
-
-  if (
-    tags.amenity === "fast_food" ||
-    tags.shop === "convenience" ||
-    /\b(bargain|discount|dollar|grocery outlet|taqueria)\b/.test(searchable)
-  ) {
-    return "Under $10";
-  }
-
-  return "Unknown";
+  return "Address unavailable";
 }
 
 function getCategory(tags: OsmTags): FoodResource["category"] {
@@ -105,12 +76,16 @@ function getCategory(tags: OsmTags): FoodResource["category"] {
     return "Cafe";
   }
 
-  if (tags.shop === "supermarket" || tags.shop === "greengrocer") {
+  if (tags.shop === "supermarket") {
     return "Supermarket";
   }
 
   if (tags.shop === "convenience") {
     return "Convenience store";
+  }
+
+  if (tags.shop === "greengrocer") {
+    return "Grocery";
   }
 
   return "Nearby food place";
@@ -255,6 +230,11 @@ export async function fetchNearbyFoodPlaces(
   let lastError: unknown = null;
 
   for (const url of OVERPASS_URLS) {
+    const requestController = new AbortController();
+    const abortRequest = () => requestController.abort();
+    const timeout = setTimeout(abortRequest, REQUEST_TIMEOUT_MS);
+    signal?.addEventListener("abort", abortRequest, { once: true });
+
     try {
       const response = await fetch(url, {
         method: "POST",
@@ -262,7 +242,7 @@ export async function fetchNearbyFoodPlaces(
         headers: {
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
         },
-        signal,
+        signal: requestController.signal,
       });
 
       if (!response.ok) {
@@ -283,7 +263,12 @@ export async function fetchNearbyFoodPlaces(
         throw error;
       }
 
-      lastError = error;
+      lastError = requestController.signal.aborted
+        ? new Error(`Overpass request to ${url} timed out after 12 seconds.`)
+        : error;
+    } finally {
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", abortRequest);
     }
   }
 
@@ -319,13 +304,13 @@ export async function fetchNearbyFoodPlaces(
           id: `osm-${element.type}-${element.id}`,
           name,
           category: getCategory(tags),
-          address: getAddress(tags, elementLat, elementLng),
+          address: getAddress(tags),
           neighborhood:
             tags["addr:suburb"] ||
             tags["addr:neighbourhood"] ||
             "Near your location",
-          hours: tags.opening_hours || "Hours unknown.",
-          cost: inferCost(tags),
+          hours: tags.opening_hours || "Hours unknown",
+          cost: "Unknown",
           eligibility: "Open to the public",
           website: getWebsite(tags, element.type, element.id),
           phone: formatPhone(tags),

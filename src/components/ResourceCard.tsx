@@ -19,6 +19,7 @@ const categoryStyles: Record<ResourceCategory, string> = {
   Cafe: "bg-sky-300/10 text-sky-200",
   Supermarket: "bg-teal-300/10 text-teal-200",
   "Convenience store": "bg-yellow-300/10 text-yellow-200",
+  Grocery: "bg-lime-300/10 text-lime-200",
 };
 
 type ResourceCardProps = {

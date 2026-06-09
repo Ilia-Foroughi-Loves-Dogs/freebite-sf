@@ -8,7 +8,8 @@ export type ResourceCategory =
   | "Fast food"
   | "Cafe"
   | "Supermarket"
-  | "Convenience store";
+  | "Convenience store"
+  | "Grocery";
 
 export type CheapMenuItem = {
   name: string;

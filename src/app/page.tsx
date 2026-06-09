@@ -113,8 +113,11 @@ export default function Home() {
       }
 
       setNearbyError(
-        "Live nearby places could not be loaded. The verified SF resources are still available.",
+        error instanceof Error
+          ? error.message
+          : "All Overpass requests failed.",
       );
+      setLastUpdated(new Date());
     } finally {
       if (requestController.current === controller) {
         setIsLoading(false);
@@ -123,33 +126,15 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    requestController.current = controller;
+    const initialLoad = window.setTimeout(() => {
+      void loadNearby(DEFAULT_LOCATION);
+    }, 0);
 
-    fetchNearbyFoodPlaces(
-      DEFAULT_LOCATION.lat,
-      DEFAULT_LOCATION.lng,
-      controller.signal,
-    )
-      .then((nearby) => {
-        setLiveResources(nearby);
-        setLastUpdated(new Date());
-      })
-      .catch((error: unknown) => {
-        if (!(error instanceof DOMException && error.name === "AbortError")) {
-          setNearbyError(
-            "Live nearby places could not be loaded. The verified SF resources are still available.",
-          );
-        }
-      })
-      .finally(() => {
-        if (requestController.current === controller) {
-          setIsLoading(false);
-        }
-      });
-
-    return () => controller.abort();
-  }, []);
+    return () => {
+      window.clearTimeout(initialLoad);
+      requestController.current?.abort();
+    };
+  }, [loadNearby]);
 
   const displayedResources = useMemo(() => {
     const now = new Date();
@@ -343,6 +328,18 @@ export default function Home() {
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-5 py-4">
+                <dt className="text-sm text-slate-500">Loading</dt>
+                <dd className="text-sm font-semibold text-emerald-300">
+                  {isLoading ? "true" : "false"}
+                </dd>
+              </div>
+              <div className="flex items-start justify-between gap-5 py-4">
+                <dt className="text-sm text-slate-500">Overpass error</dt>
+                <dd className="max-w-[60%] text-right text-sm font-medium text-white">
+                  {nearbyError ?? "None"}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-5 py-4">
                 <dt className="text-sm text-slate-500">Static resources count</dt>
                 <dd className="text-sm font-semibold text-emerald-300">
                   {resources.length}
@@ -372,7 +369,9 @@ export default function Home() {
                         hour: "numeric",
                         minute: "2-digit",
                       })
-                    : "Loading now"}
+                    : isLoading
+                      ? "Loading now"
+                      : "Not yet"}
                 </dd>
               </div>
             </dl>
