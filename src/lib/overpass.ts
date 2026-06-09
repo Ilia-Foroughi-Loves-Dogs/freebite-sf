@@ -5,7 +5,7 @@ const OVERPASS_URLS = [
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass-api.de/api/interpreter",
 ];
-export const DEFAULT_RADIUS_METERS = 1200;
+export const DEFAULT_RADIUS_METERS = 700;
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_LIVE_RESULTS = 40;
 
@@ -33,14 +33,14 @@ const dayIndexes: Record<string, number> = {
   Sa: 6,
 };
 
-function buildQuery(lat: number, lng: number) {
+function buildQuery(lat: number, lng: number, radiusMeters: number) {
   return `[out:json][timeout:8];
 (
-  node["amenity"="restaurant"](around:${DEFAULT_RADIUS_METERS},${lat},${lng});
-  node["amenity"="fast_food"](around:${DEFAULT_RADIUS_METERS},${lat},${lng});
-  node["amenity"="cafe"](around:${DEFAULT_RADIUS_METERS},${lat},${lng});
-  node["shop"="supermarket"](around:${DEFAULT_RADIUS_METERS},${lat},${lng});
-  node["shop"="convenience"](around:${DEFAULT_RADIUS_METERS},${lat},${lng});
+  node["amenity"="restaurant"](around:${radiusMeters},${lat},${lng});
+  node["amenity"="fast_food"](around:${radiusMeters},${lat},${lng});
+  node["amenity"="cafe"](around:${radiusMeters},${lat},${lng});
+  node["shop"="supermarket"](around:${radiusMeters},${lat},${lng});
+  node["shop"="convenience"](around:${radiusMeters},${lat},${lng});
 );
 out body 40;`;
 }
@@ -217,6 +217,7 @@ export function getSimpleOpenStatus(
 export async function fetchNearbyFoodPlaces(
   lat: number,
   lng: number,
+  radiusMeters = DEFAULT_RADIUS_METERS,
   signal?: AbortSignal,
 ): Promise<FoodResource[]> {
   let data: OverpassResponse | null = null;
@@ -229,7 +230,9 @@ export async function fetchNearbyFoodPlaces(
     try {
       const response = await fetch(url, {
         method: "POST",
-        body: new URLSearchParams({ data: buildQuery(lat, lng) }),
+        body: new URLSearchParams({
+          data: buildQuery(lat, lng, radiusMeters),
+        }),
         headers: {
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
         },

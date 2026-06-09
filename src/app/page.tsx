@@ -29,6 +29,12 @@ const DEFAULT_LOCATION: Coordinates = {
 
 type LiveSearchSource = "Overpass" | "Fallback" | "Static only";
 
+const radiusOptions = [
+  { label: "0.5 mile", meters: DEFAULT_RADIUS_METERS },
+  { label: "1 mile", meters: 1600 },
+  { label: "2 miles", meters: 3200 },
+] as const;
+
 function isNearbyResource(resource: FoodResource) {
   return resource.source === "osm" || resource.source === "fallback";
 }
@@ -95,50 +101,55 @@ export default function Home() {
   const [openNow, setOpenNow] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [radiusMeters, setRadiusMeters] = useState(DEFAULT_RADIUS_METERS);
   const [nearbyError, setNearbyError] = useState<string | null>(null);
   const [liveSearchSource, setLiveSearchSource] =
     useState<LiveSearchSource>("Static only");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const requestController = useRef<AbortController | null>(null);
 
-  const loadNearby = useCallback(async (searchLocation: Coordinates) => {
-    requestController.current?.abort();
-    const controller = new AbortController();
-    requestController.current = controller;
+  const loadNearby = useCallback(
+    async (searchLocation: Coordinates, searchRadiusMeters: number) => {
+      requestController.current?.abort();
+      const controller = new AbortController();
+      requestController.current = controller;
 
-    setIsLoading(true);
-    setNearbyError(null);
+      setIsLoading(true);
+      setNearbyError(null);
 
-    try {
-      const nearby = await fetchNearbyFoodPlaces(
-        searchLocation.lat,
-        searchLocation.lng,
-        controller.signal,
-      );
-      setLiveResources(nearby);
-      setLiveSearchSource("Overpass");
-      setLastUpdated(new Date());
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        return;
+      try {
+        const nearby = await fetchNearbyFoodPlaces(
+          searchLocation.lat,
+          searchLocation.lng,
+          searchRadiusMeters,
+          controller.signal,
+        );
+        setLiveResources(nearby);
+        setLiveSearchSource("Overpass");
+        setLastUpdated(new Date());
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setLiveResources(fallbackNearbyResources);
+        setLiveSearchSource("Fallback");
+        setNearbyError(
+          "Live nearby search is temporarily unavailable. Showing saved resources.",
+        );
+        setLastUpdated(new Date());
+      } finally {
+        if (requestController.current === controller) {
+          setIsLoading(false);
+        }
       }
-
-      setLiveResources(fallbackNearbyResources);
-      setLiveSearchSource("Fallback");
-      setNearbyError(
-        "Live nearby search is temporarily unavailable. Showing saved resources.",
-      );
-      setLastUpdated(new Date());
-    } finally {
-      if (requestController.current === controller) {
-        setIsLoading(false);
-      }
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => {
-      void loadNearby(DEFAULT_LOCATION);
+      void loadNearby(DEFAULT_LOCATION, DEFAULT_RADIUS_METERS);
     }, 0);
 
     return () => {
@@ -146,6 +157,14 @@ export default function Home() {
       requestController.current?.abort();
     };
   }, [loadNearby]);
+
+  const selectedRadiusLabel =
+    radiusOptions.find((option) => option.meters === radiusMeters)?.label ??
+    `${radiusMeters.toLocaleString()} meters`;
+  const liveResultsCount =
+    liveSearchSource === "Overpass" ? liveResources.length : 0;
+  const fallbackCount =
+    liveSearchSource === "Fallback" ? liveResources.length : 0;
 
   const displayedResources = useMemo(() => {
     const now = new Date();
@@ -233,7 +252,7 @@ export default function Home() {
         setLocationLabel("Your current location");
         setLocationMessage("Location found. Nearby food has been refreshed.");
         setIsLocating(false);
-        void loadNearby(userLocation);
+        void loadNearby(userLocation, radiusMeters);
       },
       () => {
         setLocation(DEFAULT_LOCATION);
@@ -242,7 +261,7 @@ export default function Home() {
           "We could not use your location. Showing San Francisco default results instead.",
         );
         setIsLocating(false);
-        void loadNearby(DEFAULT_LOCATION);
+        void loadNearby(DEFAULT_LOCATION, radiusMeters);
       },
       {
         enableHighAccuracy: true,
@@ -286,7 +305,8 @@ export default function Home() {
             </h1>
             <p className="mt-7 max-w-2xl text-lg leading-8 text-slate-400">
               Combine trusted community resources with live nearby restaurants,
-              cafes, markets, and convenience stores within 1,200 meters.
+              cafes, markets, and convenience stores within your selected
+              radius.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <button
@@ -339,9 +359,9 @@ export default function Home() {
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-5 py-4">
-                <dt className="text-sm text-slate-500">Search radius</dt>
+                <dt className="text-sm text-slate-500">Selected radius</dt>
                 <dd className="text-sm font-semibold text-emerald-300">
-                  {DEFAULT_RADIUS_METERS.toLocaleString()} meters
+                  {selectedRadiusLabel} ({radiusMeters.toLocaleString()} meters)
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-5 py-4">
@@ -350,12 +370,14 @@ export default function Home() {
                   {liveSearchSource}
                 </dd>
               </div>
-              <div className="flex items-start justify-between gap-5 py-4">
-                <dt className="text-sm text-slate-500">Error message</dt>
-                <dd className="max-w-[60%] text-right text-sm font-medium text-white">
-                  {nearbyError ?? "None"}
-                </dd>
-              </div>
+              {nearbyError && (
+                <div className="flex items-start justify-between gap-5 py-4">
+                  <dt className="text-sm text-slate-500">Error message</dt>
+                  <dd className="max-w-[60%] text-right text-sm font-medium text-white">
+                    {nearbyError}
+                  </dd>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-5 py-4">
                 <dt className="text-sm text-slate-500">Loading</dt>
                 <dd className="text-sm font-semibold text-emerald-300">
@@ -370,10 +392,18 @@ export default function Home() {
               </div>
               <div className="flex items-center justify-between gap-5 py-4">
                 <dt className="text-sm text-slate-500">
-                  Live nearby results count
+                  Live results count
                 </dt>
                 <dd className="text-sm font-semibold text-emerald-300">
-                  {liveResources.length}
+                  {liveResultsCount}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-5 py-4">
+                <dt className="text-sm text-slate-500">
+                  Fallback results count
+                </dt>
+                <dd className="text-sm font-semibold text-emerald-300">
+                  {fallbackCount}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-5 py-4">
@@ -399,13 +429,40 @@ export default function Home() {
               </div>
             </dl>
 
+            <div className="mt-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                Search radius
+              </p>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {radiusOptions.map((option) => (
+                  <button
+                    aria-pressed={radiusMeters === option.meters}
+                    className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-60 ${
+                      radiusMeters === option.meters
+                        ? "border-emerald-300 bg-emerald-300 text-[#07110e]"
+                        : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-white/25 hover:text-white"
+                    }`}
+                    disabled={isLoading && radiusMeters === option.meters}
+                    key={option.meters}
+                    onClick={() => {
+                      setRadiusMeters(option.meters);
+                      void loadNearby(location, option.meters);
+                    }}
+                    type="button"
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <button
               className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-300/[0.07] px-4 py-3 text-sm font-semibold text-emerald-200 hover:bg-emerald-300/[0.12] disabled:cursor-wait disabled:opacity-60"
               disabled={isLoading}
-              onClick={() => void loadNearby(location)}
+              onClick={() => void loadNearby(location, radiusMeters)}
               type="button"
             >
-              {isLoading ? "Loading nearby food..." : "Refresh nearby food"}
+              {isLoading ? "Trying live search..." : "Try live search again"}
             </button>
             {nearbyError && (
               <p
@@ -455,7 +512,7 @@ export default function Home() {
               aria-live="polite"
               className="mt-8 rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.05] p-5 text-sm text-emerald-100"
             >
-              Searching OpenStreetMap for food within 1,200 meters...
+              Searching OpenStreetMap for food within {selectedRadiusLabel}...
             </div>
           )}
 
