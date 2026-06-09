@@ -33,7 +33,7 @@ export type FoodResource = {
   lat: number;
   lng: number;
   tags: string[];
-  source: "static" | "osm";
+  source: "static" | "osm" | "fallback";
   distanceMiles?: number;
   costRank?: number;
   menuUrl?: string;

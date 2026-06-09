@@ -5,21 +5,17 @@ const OVERPASS_URLS = [
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass-api.de/api/interpreter",
 ];
-const SEARCH_RADIUS_METERS = 3218;
-const REQUEST_TIMEOUT_MS = 12_000;
-const MAX_LIVE_RESULTS = 100;
+export const DEFAULT_RADIUS_METERS = 1200;
+const REQUEST_TIMEOUT_MS = 10_000;
+const MAX_LIVE_RESULTS = 40;
 
 type OsmTags = Record<string, string>;
 
 type OverpassElement = {
-  type: "node" | "way" | "relation";
+  type: "node";
   id: number;
-  lat?: number;
-  lon?: number;
-  center?: {
-    lat: number;
-    lon: number;
-  };
+  lat: number;
+  lon: number;
   tags?: OsmTags;
 };
 
@@ -38,14 +34,15 @@ const dayIndexes: Record<string, number> = {
 };
 
 function buildQuery(lat: number, lng: number) {
-  return `
-    [out:json][timeout:25];
-    (
-      nwr(around:${SEARCH_RADIUS_METERS},${lat},${lng})["amenity"~"^(restaurant|fast_food|cafe)$"];
-      nwr(around:${SEARCH_RADIUS_METERS},${lat},${lng})["shop"~"^(supermarket|convenience|greengrocer)$"];
-    );
-    out center tags;
-  `;
+  return `[out:json][timeout:8];
+(
+  node["amenity"="restaurant"](around:${DEFAULT_RADIUS_METERS},${lat},${lng});
+  node["amenity"="fast_food"](around:${DEFAULT_RADIUS_METERS},${lat},${lng});
+  node["amenity"="cafe"](around:${DEFAULT_RADIUS_METERS},${lat},${lng});
+  node["shop"="supermarket"](around:${DEFAULT_RADIUS_METERS},${lat},${lng});
+  node["shop"="convenience"](around:${DEFAULT_RADIUS_METERS},${lat},${lng});
+);
+out body 40;`;
 }
 
 function getAddress(tags: OsmTags) {
@@ -82,10 +79,6 @@ function getCategory(tags: OsmTags): FoodResource["category"] {
 
   if (tags.shop === "convenience") {
     return "Convenience store";
-  }
-
-  if (tags.shop === "greengrocer") {
-    return "Grocery";
   }
 
   return "Nearby food place";
@@ -227,8 +220,6 @@ export async function fetchNearbyFoodPlaces(
   signal?: AbortSignal,
 ): Promise<FoodResource[]> {
   let data: OverpassResponse | null = null;
-  let lastError: unknown = null;
-
   for (const url of OVERPASS_URLS) {
     const requestController = new AbortController();
     const abortRequest = () => requestController.abort();
@@ -262,10 +253,6 @@ export async function fetchNearbyFoodPlaces(
       if (signal?.aborted) {
         throw error;
       }
-
-      lastError = requestController.signal.aborted
-        ? new Error(`Overpass request to ${url} timed out after 12 seconds.`)
-        : error;
     } finally {
       clearTimeout(timeout);
       signal?.removeEventListener("abort", abortRequest);
@@ -273,17 +260,17 @@ export async function fetchNearbyFoodPlaces(
   }
 
   if (!data) {
-    throw lastError instanceof Error
-      ? lastError
-      : new Error("All Overpass requests failed.");
+    throw new Error(
+      "Live nearby search is temporarily unavailable. Showing saved resources.",
+    );
   }
 
   const today = new Date().toISOString().slice(0, 10);
 
   return data.elements
     .flatMap((element) => {
-      const elementLat = element.lat ?? element.center?.lat;
-      const elementLng = element.lon ?? element.center?.lon;
+      const elementLat = element.lat;
+      const elementLng = element.lon;
       const tags = element.tags;
 
       if (!tags || elementLat === undefined || elementLng === undefined) {

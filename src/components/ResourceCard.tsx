@@ -111,6 +111,11 @@ export function ResourceCard({
                 Live nearby result
               </span>
             )}
+            {resource.source === "fallback" && (
+              <span className="inline-flex rounded-full border border-sky-300/20 bg-sky-300/[0.06] px-3 py-1 text-xs font-semibold text-sky-200">
+                Saved nearby result
+              </span>
+            )}
           </div>
           <h3 className="mt-4 text-xl font-semibold tracking-tight text-white sm:text-2xl">
             {resource.name}

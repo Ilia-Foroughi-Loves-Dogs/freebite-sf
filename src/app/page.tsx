@@ -9,6 +9,7 @@ import {
 } from "@/components/Filters";
 import { ArrowIcon, LocationIcon } from "@/components/icons";
 import { ResourceCard } from "@/components/ResourceCard";
+import { fallbackNearbyResources } from "@/data/fallbackNearby";
 import { resources, type FoodResource } from "@/data/resources";
 import { getCostRank } from "@/lib/cost";
 import {
@@ -17,6 +18,7 @@ import {
 } from "@/lib/distance";
 import {
   fetchNearbyFoodPlaces,
+  DEFAULT_RADIUS_METERS,
   getSimpleOpenStatus,
 } from "@/lib/overpass";
 
@@ -24,6 +26,12 @@ const DEFAULT_LOCATION: Coordinates = {
   lat: 37.7793,
   lng: -122.4193,
 };
+
+type LiveSearchSource = "Overpass" | "Fallback" | "Static only";
+
+function isNearbyResource(resource: FoodResource) {
+  return resource.source === "osm" || resource.source === "fallback";
+}
 
 const categoryFilters: Partial<
   Record<ResourceFilter, FoodResource["category"]>
@@ -48,18 +56,18 @@ function matchesFilter(resource: FoodResource, filter: ResourceFilter) {
   }
 
   if (filter === "Nearby food places") {
-    return resource.source === "osm";
+    return isNearbyResource(resource);
   }
 
   if (filter === "Nearby restaurants") {
     return (
-      resource.source === "osm" &&
+      isNearbyResource(resource) &&
       ["Restaurant", "Fast food", "Cafe"].includes(resource.category)
     );
   }
 
   if (filter === "Cheap/unknown nearby food") {
-    return resource.source === "osm" && resource.costRank !== 0;
+    return isNearbyResource(resource) && resource.costRank !== 0;
   }
 
   return resource.category === categoryFilters[filter];
@@ -88,6 +96,8 @@ export default function Home() {
   const [isLocating, setIsLocating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [nearbyError, setNearbyError] = useState<string | null>(null);
+  const [liveSearchSource, setLiveSearchSource] =
+    useState<LiveSearchSource>("Static only");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const requestController = useRef<AbortController | null>(null);
 
@@ -106,16 +116,17 @@ export default function Home() {
         controller.signal,
       );
       setLiveResources(nearby);
+      setLiveSearchSource("Overpass");
       setLastUpdated(new Date());
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         return;
       }
 
+      setLiveResources(fallbackNearbyResources);
+      setLiveSearchSource("Fallback");
       setNearbyError(
-        error instanceof Error
-          ? error.message
-          : "All Overpass requests failed.",
+        "Live nearby search is temporarily unavailable. Showing saved resources.",
       );
       setLastUpdated(new Date());
     } finally {
@@ -275,7 +286,7 @@ export default function Home() {
             </h1>
             <p className="mt-7 max-w-2xl text-lg leading-8 text-slate-400">
               Combine trusted community resources with live nearby restaurants,
-              cafes, markets, and convenience stores within two miles.
+              cafes, markets, and convenience stores within 1,200 meters.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <button
@@ -328,15 +339,27 @@ export default function Home() {
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-5 py-4">
-                <dt className="text-sm text-slate-500">Loading</dt>
+                <dt className="text-sm text-slate-500">Search radius</dt>
                 <dd className="text-sm font-semibold text-emerald-300">
-                  {isLoading ? "true" : "false"}
+                  {DEFAULT_RADIUS_METERS.toLocaleString()} meters
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-5 py-4">
+                <dt className="text-sm text-slate-500">Live search source</dt>
+                <dd className="text-sm font-semibold text-emerald-300">
+                  {liveSearchSource}
                 </dd>
               </div>
               <div className="flex items-start justify-between gap-5 py-4">
-                <dt className="text-sm text-slate-500">Overpass error</dt>
+                <dt className="text-sm text-slate-500">Error message</dt>
                 <dd className="max-w-[60%] text-right text-sm font-medium text-white">
                   {nearbyError ?? "None"}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-5 py-4">
+                <dt className="text-sm text-slate-500">Loading</dt>
+                <dd className="text-sm font-semibold text-emerald-300">
+                  {isLoading ? "true" : "false"}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-5 py-4">
@@ -432,7 +455,7 @@ export default function Home() {
               aria-live="polite"
               className="mt-8 rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.05] p-5 text-sm text-emerald-100"
             >
-              Searching OpenStreetMap for food within two miles...
+              Searching OpenStreetMap for food within 1,200 meters...
             </div>
           )}
 
