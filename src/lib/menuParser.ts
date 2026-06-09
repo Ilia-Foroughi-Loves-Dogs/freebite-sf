@@ -160,6 +160,8 @@ export function parseMenuItems(html: string, sourceUrl: string): CheapMenuItem[]
         name,
         price,
         priceText: match[0].replace(/\s+/g, " ").trim(),
+        sourceType: "live_menu",
+        verified: false,
         sourceUrl,
       });
     }

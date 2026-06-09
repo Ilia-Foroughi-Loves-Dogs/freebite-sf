@@ -13,6 +13,7 @@ const categoryStyles: Record<ResourceCategory, string> = {
   "Free hot meals": "bg-orange-300/10 text-orange-200",
   "Community fridge": "bg-cyan-300/10 text-cyan-200",
   "Student food resource": "bg-violet-300/10 text-violet-200",
+  "Cheap food": "bg-amber-300/10 text-amber-100",
   "Nearby food place": "bg-lime-300/10 text-lime-200",
   Restaurant: "bg-lime-300/10 text-lime-200",
   "Fast food": "bg-amber-300/10 text-amber-200",
@@ -236,7 +237,7 @@ export function ResourceCard({
                 {cheapestItems.map((item) => (
                   <li
                     className="rounded-xl border border-emerald-300/10 bg-emerald-300/[0.04] px-3 py-2.5 text-sm"
-                    key={`${item.name}-${item.price}-${item.sourceUrl}`}
+                    key={`${item.name}-${item.price}-${item.sourceUrl ?? item.sourceType}`}
                   >
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <span className="font-medium text-slate-100">
@@ -247,7 +248,7 @@ export function ResourceCard({
                       </span>
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                      {item.sourceUrl !== "manual-seed" && (
+                      {item.sourceUrl && item.sourceUrl !== "manual-seed" && (
                         <a
                           className="text-emerald-200 underline decoration-emerald-300/40 underline-offset-2 hover:text-emerald-100"
                           href={item.sourceUrl}
@@ -258,17 +259,17 @@ export function ResourceCard({
                         </a>
                       )}
                       <span className="text-amber-200">
-                        Verify before going
+                        {item.sourceType === "manual_seed"
+                          ? "Example/manual price — verify before going"
+                          : "Verify before going"}
                       </span>
                     </div>
                   </li>
                 ))}
               </ul>
               <p className="mt-3 text-xs leading-5 text-slate-500">
-                {cheapestItems.some(
-                  (item) => item.sourceUrl === "manual-seed",
-                )
-                  ? "Example cheap items — verify before going."
+                {cheapestItems.some((item) => item.sourceType === "manual_seed")
+                  ? "Example/manual price — verify before going."
                   : "Prices may be outdated. Verify before going."}
                 {menuCheckedDate && ` Last checked ${menuCheckedDate}.`}
               </p>

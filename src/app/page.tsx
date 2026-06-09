@@ -9,8 +9,13 @@ import {
 } from "@/components/Filters";
 import { ArrowIcon, LocationIcon } from "@/components/icons";
 import { ResourceCard } from "@/components/ResourceCard";
+import { cheapFoodResources } from "@/data/cheapFoodItems";
 import { fallbackNearbyResources } from "@/data/fallbackNearby";
-import { resources, type FoodResource } from "@/data/resources";
+import {
+  getDirectionsUrl,
+  resources,
+  type FoodResource,
+} from "@/data/resources";
 import { getCostRank } from "@/lib/cost";
 import {
   calculateDistanceMiles,
@@ -34,15 +39,6 @@ const radiusOptions = [
   { label: "1 mile", meters: 1600 },
   { label: "2 miles", meters: 3200 },
 ] as const;
-
-const nearbyCategories: FoodResource["category"][] = [
-  "Restaurant",
-  "Fast food",
-  "Cafe",
-  "Nearby food place",
-  "Supermarket",
-  "Convenience store",
-];
 
 function hasCheapItems(resource: FoodResource) {
   return Boolean(
@@ -72,22 +68,20 @@ function matchesFilter(resource: FoodResource, filter: ResourceFilter) {
     return isFreeResource(resource);
   }
 
-  if (filter === "Free groceries" || filter === "Free hot meals") {
-    return resource.category === filter;
+  if (filter === "Under $5") {
+    return isFreeResource(resource) || getLowestMenuPrice(resource) <= 5;
   }
 
-  if (filter === "Community fridges") {
-    return ["Community fridge", "Community fridges"].includes(
-      resource.category,
-    );
+  if (filter === "Under $10") {
+    return isFreeResource(resource) || getLowestMenuPrice(resource) <= 10;
   }
 
-  if (filter === "Student resources") {
-    return resource.category.includes("Student");
+  if (filter === "Cheap food") {
+    return resource.source === "curated" || hasCheapItems(resource);
   }
 
   if (filter === "Nearby restaurants") {
-    return nearbyCategories.includes(resource.category);
+    return resource.source === "osm" || resource.source === "fallback";
   }
 
   if (filter === "Has cheap items") {
@@ -106,26 +100,12 @@ function getLowestMenuPrice(resource: FoodResource) {
   );
 }
 
-function getExplicitCostPrice(resource: FoodResource) {
-  const normalizedCost = resource.cost.toLowerCase();
-
-  if (normalizedCost.includes("under $5")) {
-    return 5;
-  }
-
-  if (normalizedCost.includes("under $10")) {
-    return 10;
-  }
-
-  return Infinity;
-}
-
 function getCheapPrice(resource: FoodResource) {
   if (isFreeResource(resource)) {
     return 0;
   }
 
-  return Math.min(getLowestMenuPrice(resource), getExplicitCostPrice(resource));
+  return getLowestMenuPrice(resource);
 }
 
 function getPriceGroup(resource: FoodResource) {
@@ -133,11 +113,23 @@ function getPriceGroup(resource: FoodResource) {
     return 0;
   }
 
-  if (hasCheapItems(resource) || getExplicitCostPrice(resource) < Infinity) {
+  if (resource.source === "curated") {
     return 1;
   }
 
-  return 2;
+  const sourceTypes = new Set(
+    resource.cheapestItems?.map((item) => item.sourceType) ?? [],
+  );
+
+  if (sourceTypes.has("live_menu")) {
+    return 2;
+  }
+
+  if (sourceTypes.has("user_submitted")) {
+    return 3;
+  }
+
+  return 4;
 }
 
 function getDistance(resource: FoodResource) {
@@ -152,14 +144,75 @@ function sortResources(a: FoodResource, b: FoodResource, sort: SortOption) {
   }
 
   if (sort === "Free first") {
-    return getPriceGroup(a) - getPriceGroup(b) || distanceDifference;
+    return (
+      Number(!isFreeResource(a)) - Number(!isFreeResource(b)) ||
+      distanceDifference
+    );
   }
 
   return (
-    getCheapPrice(a) - getCheapPrice(b) ||
     getPriceGroup(a) - getPriceGroup(b) ||
+    getCheapPrice(a) - getCheapPrice(b) ||
     distanceDifference
   );
+}
+
+function normalizePlaceName(name: string) {
+  return name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\b(?:restaurant|cafe|bakery|the)\b/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function namesMatch(a: string, b: string) {
+  const normalizedA = normalizePlaceName(a);
+  const normalizedB = normalizePlaceName(b);
+
+  return (
+    normalizedA === normalizedB ||
+    normalizedA.includes(normalizedB) ||
+    normalizedB.includes(normalizedA)
+  );
+}
+
+function mergeCuratedWithNearby(
+  curatedResources: FoodResource[],
+  nearbyResources: FoodResource[],
+) {
+  const matchedNearbyIds = new Set<string>();
+  const curated = curatedResources.map((curatedResource) => {
+    const match = nearbyResources.find(
+      (nearbyResource) =>
+        !matchedNearbyIds.has(nearbyResource.id) &&
+        namesMatch(curatedResource.name, nearbyResource.name) &&
+        calculateDistanceMiles(curatedResource, nearbyResource) <= 0.25,
+    );
+
+    if (!match) {
+      return curatedResource;
+    }
+
+    matchedNearbyIds.add(match.id);
+    return {
+      ...curatedResource,
+      hours:
+        match.hours === "Hours unknown"
+          ? curatedResource.hours
+          : match.hours,
+      phone: match.phone ?? curatedResource.phone,
+      website: match.website ?? curatedResource.website,
+    };
+  });
+
+  return [
+    ...curated,
+    ...nearbyResources.filter(
+      (nearbyResource) => !matchedNearbyIds.has(nearbyResource.id),
+    ),
+  ];
 }
 
 export default function Home() {
@@ -240,8 +293,13 @@ export default function Home() {
     `${radiusMeters.toLocaleString()} meters`;
 
   const enrichedResources = useMemo(
-    () =>
-      [...resources, ...liveResources].map((resource) => {
+    () => {
+      const pricedAndNearbyResources = mergeCuratedWithNearby(
+        cheapFoodResources,
+        liveResources,
+      );
+
+      return [...resources, ...pricedAndNearbyResources].map((resource) => {
         const enrichedResource = { ...resource, ...menuResults[resource.id] };
 
         return {
@@ -249,7 +307,8 @@ export default function Home() {
           costRank: getCostRank(enrichedResource.cost),
           distanceMiles: calculateDistanceMiles(location, enrichedResource),
         };
-      }),
+      });
+    },
     [liveResources, location, menuResults],
   );
 
@@ -273,13 +332,16 @@ export default function Home() {
         )
         .sort(
           (a, b) =>
+            getPriceGroup(a) - getPriceGroup(b) ||
             getCheapPrice(a) - getCheapPrice(b) ||
             getDistance(a) - getDistance(b),
         )
-        .slice(0, 5),
+        .slice(0, 8),
     [enrichedResources],
   );
-  const cheapItemsCount = enrichedResources.filter(hasCheapItems).length;
+  const actualPricesCount = enrichedResources.filter(
+    (resource) => isFreeResource(resource) || hasCheapItems(resource),
+  ).length;
   const unknownPriceCount = enrichedResources.filter(isUnknownPrice).length;
 
   const updateMenuResult = useCallback(
@@ -361,16 +423,15 @@ export default function Home() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/[0.07] px-3 py-1.5 text-xs font-medium text-emerald-200">
               <span className="size-1.5 rounded-full bg-emerald-300" />
-              Live food search across San Francisco
+              Free and priced food across San Francisco
             </div>
             <h1 className="mt-7 max-w-4xl font-display text-5xl font-bold leading-[1.04] tracking-[-0.045em] text-white sm:text-6xl lg:text-7xl">
               Find free, cheap, and{" "}
               <span className="text-emerald-300">nearby food.</span>
             </h1>
             <p className="mt-7 max-w-2xl text-lg leading-8 text-slate-400">
-              Combine trusted community resources with live nearby restaurants,
-              cafes, markets, and convenience stores within your selected
-              radius.
+              Compare free resources and curated low-cost menu items, with
+              OpenStreetMap used only to discover nearby food places.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <button
@@ -461,9 +522,19 @@ export default function Home() {
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-5 py-4">
-                <dt className="text-sm text-slate-500">Static resources count</dt>
+                <dt className="text-sm text-slate-500">
+                  Static free resources count
+                </dt>
                 <dd className="text-sm font-semibold text-emerald-300">
                   {resources.length}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-5 py-4">
+                <dt className="text-sm text-slate-500">
+                  Curated cheap-food count
+                </dt>
+                <dd className="text-sm font-semibold text-emerald-300">
+                  {cheapFoodResources.length}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-5 py-4">
@@ -482,15 +553,15 @@ export default function Home() {
               </div>
               <div className="flex items-center justify-between gap-5 py-4">
                 <dt className="text-sm text-slate-500">
-                  Resources with cheap items
+                  Results with actual prices
                 </dt>
                 <dd className="text-sm font-semibold text-emerald-300">
-                  {cheapItemsCount}
+                  {actualPricesCount}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-5 py-4">
                 <dt className="text-sm text-slate-500">
-                  Unknown-price resources
+                  Unknown-price restaurant count
                 </dt>
                 <dd className="text-sm font-semibold text-emerald-300">
                   {unknownPriceCount}
@@ -573,20 +644,9 @@ export default function Home() {
               </h2>
             </div>
             <p className="max-w-md text-sm leading-6 text-slate-400">
-              Live places come from OpenStreetMap. Check details before visiting
-              because hours, prices, and availability can change.
+              Prices come from curated records or menu results, never from
+              OpenStreetMap. Manual examples should be verified before visiting.
             </p>
-          </div>
-
-          <div className="mt-9">
-            <Filters
-              activeFilter={selectedFilter}
-              activeSort={selectedSort}
-              onFilterChange={setSelectedFilter}
-              onOpenNowChange={setOpenNow}
-              onSortChange={setSelectedSort}
-              openNow={openNow}
-            />
           </div>
 
           {isLoading && liveResources.length === 0 && (
@@ -612,7 +672,7 @@ export default function Home() {
                     className="mt-2 text-2xl font-semibold text-white"
                     id="cheap-food-heading"
                   >
-                    Cheap food near you
+                    Cheapest food near you
                   </h3>
                 </div>
                 <p className="text-sm text-slate-400">
@@ -651,7 +711,7 @@ export default function Home() {
                       </div>
                       <a
                         className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-300 px-4 py-2.5 text-sm font-semibold text-[#07110e] hover:bg-emerald-200"
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${resource.lat}%2C${resource.lng}`}
+                        href={getDirectionsUrl(resource)}
                         rel="noreferrer"
                         target="_blank"
                       >
@@ -664,6 +724,17 @@ export default function Home() {
               </div>
             </section>
           )}
+
+          <div className="mt-9">
+            <Filters
+              activeFilter={selectedFilter}
+              activeSort={selectedSort}
+              onFilterChange={setSelectedFilter}
+              onOpenNowChange={setOpenNow}
+              onSortChange={setSelectedSort}
+              openNow={openNow}
+            />
+          </div>
 
           {displayedResources.length > 0 ? (
             <div className="mt-8 grid gap-5 lg:grid-cols-2">

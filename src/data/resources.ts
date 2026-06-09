@@ -3,6 +3,7 @@ export type ResourceCategory =
   | "Free hot meals"
   | "Community fridge"
   | "Student food resource"
+  | "Cheap food"
   | "Nearby food place"
   | "Restaurant"
   | "Fast food"
@@ -15,7 +16,10 @@ export type CheapMenuItem = {
   name: string;
   price: number;
   priceText: string;
-  sourceUrl: string;
+  sourceType: "manual_seed" | "user_submitted" | "live_menu";
+  verified: boolean;
+  sourceUrl?: string;
+  lastChecked?: string;
 };
 
 export type FoodResource = {
@@ -33,7 +37,7 @@ export type FoodResource = {
   lat: number;
   lng: number;
   tags: string[];
-  source: "static" | "osm" | "fallback";
+  source: "static" | "curated" | "osm" | "fallback";
   distanceMiles?: number;
   costRank?: number;
   menuUrl?: string;
