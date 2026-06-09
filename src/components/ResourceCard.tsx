@@ -14,6 +14,11 @@ const categoryStyles: Record<ResourceCategory, string> = {
   "Community fridge": "bg-cyan-300/10 text-cyan-200",
   "Student food resource": "bg-violet-300/10 text-violet-200",
   "Nearby food place": "bg-lime-300/10 text-lime-200",
+  Restaurant: "bg-lime-300/10 text-lime-200",
+  "Fast food": "bg-amber-300/10 text-amber-200",
+  Cafe: "bg-sky-300/10 text-sky-200",
+  Supermarket: "bg-teal-300/10 text-teal-200",
+  "Convenience store": "bg-yellow-300/10 text-yellow-200",
 };
 
 type ResourceCardProps = {
@@ -42,7 +47,7 @@ export function ResourceCard({
       : openStatus === false
         ? "Closed now"
         : "Hours unknown";
-  const supportsMenuPrices = resource.category === "Nearby food place";
+  const supportsMenuPrices = resource.source === "osm";
   const canCheckMenu = supportsMenuPrices && Boolean(resource.menuUrl);
   const menuCheckedDate = resource.menuLastChecked
     ? new Intl.DateTimeFormat("en-US", {

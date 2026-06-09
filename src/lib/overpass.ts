@@ -1,7 +1,10 @@
 import type { FoodResource } from "@/data/resources";
 import { calculateDistanceMiles } from "@/lib/distance";
 
-const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+const OVERPASS_URLS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
 const SEARCH_RADIUS_METERS = 3219;
 const MAX_LIVE_RESULTS = 100;
 
@@ -87,6 +90,30 @@ function inferCost(tags: OsmTags) {
   }
 
   return "Unknown";
+}
+
+function getCategory(tags: OsmTags): FoodResource["category"] {
+  if (tags.amenity === "restaurant") {
+    return "Restaurant";
+  }
+
+  if (tags.amenity === "fast_food") {
+    return "Fast food";
+  }
+
+  if (tags.amenity === "cafe") {
+    return "Cafe";
+  }
+
+  if (tags.shop === "supermarket" || tags.shop === "greengrocer") {
+    return "Supermarket";
+  }
+
+  if (tags.shop === "convenience") {
+    return "Convenience store";
+  }
+
+  return "Nearby food place";
 }
 
 function getWebsite(tags: OsmTags, type: OverpassElement["type"], id: number) {
@@ -224,20 +251,48 @@ export async function fetchNearbyFoodPlaces(
   lng: number,
   signal?: AbortSignal,
 ): Promise<FoodResource[]> {
-  const response = await fetch(OVERPASS_URL, {
-    method: "POST",
-    body: new URLSearchParams({ data: buildQuery(lat, lng) }),
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-    },
-    signal,
-  });
+  let data: OverpassResponse | null = null;
+  let lastError: unknown = null;
 
-  if (!response.ok) {
-    throw new Error(`Overpass request failed with status ${response.status}.`);
+  for (const url of OVERPASS_URLS) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        body: new URLSearchParams({ data: buildQuery(lat, lng) }),
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        },
+        signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Overpass request failed with status ${response.status}.`,
+        );
+      }
+
+      const candidate = (await response.json()) as OverpassResponse;
+      if (!Array.isArray(candidate.elements)) {
+        throw new Error("Overpass returned an invalid response.");
+      }
+
+      data = candidate;
+      break;
+    } catch (error) {
+      if (signal?.aborted) {
+        throw error;
+      }
+
+      lastError = error;
+    }
   }
 
-  const data = (await response.json()) as OverpassResponse;
+  if (!data) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("All Overpass requests failed.");
+  }
+
   const today = new Date().toISOString().slice(0, 10);
 
   return data.elements
@@ -263,7 +318,7 @@ export async function fetchNearbyFoodPlaces(
         {
           id: `osm-${element.type}-${element.id}`,
           name,
-          category: "Nearby food place",
+          category: getCategory(tags),
           address: getAddress(tags, elementLat, elementLng),
           neighborhood:
             tags["addr:suburb"] ||

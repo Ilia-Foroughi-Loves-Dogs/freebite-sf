@@ -6,6 +6,8 @@ export type ResourceFilter =
   | "Community fridges"
   | "Student resources"
   | "Nearby food places"
+  | "Nearby restaurants"
+  | "Cheap/unknown nearby food"
   | "Has menu prices";
 
 export type SortOption =
@@ -22,6 +24,8 @@ const filters: ResourceFilter[] = [
   "Community fridges",
   "Student resources",
   "Nearby food places",
+  "Nearby restaurants",
+  "Cheap/unknown nearby food",
   "Has menu prices",
 ];
 

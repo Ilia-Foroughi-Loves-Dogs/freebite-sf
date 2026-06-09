@@ -32,7 +32,6 @@ const categoryFilters: Partial<
   "Free hot meals": "Free hot meals",
   "Community fridges": "Community fridge",
   "Student resources": "Student food resource",
-  "Nearby food places": "Nearby food place",
 };
 
 function matchesFilter(resource: FoodResource, filter: ResourceFilter) {
@@ -46,6 +45,21 @@ function matchesFilter(resource: FoodResource, filter: ResourceFilter) {
 
   if (filter === "Has menu prices") {
     return Boolean(resource.cheapestItems?.length);
+  }
+
+  if (filter === "Nearby food places") {
+    return resource.source === "osm";
+  }
+
+  if (filter === "Nearby restaurants") {
+    return (
+      resource.source === "osm" &&
+      ["Restaurant", "Fast food", "Cafe"].includes(resource.category)
+    );
+  }
+
+  if (filter === "Cheap/unknown nearby food") {
+    return resource.source === "osm" && resource.costRank !== 0;
   }
 
   return resource.category === categoryFilters[filter];
@@ -329,7 +343,23 @@ export default function Home() {
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-5 py-4">
-                <dt className="text-sm text-slate-500">Results shown</dt>
+                <dt className="text-sm text-slate-500">Static resources count</dt>
+                <dd className="text-sm font-semibold text-emerald-300">
+                  {resources.length}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-5 py-4">
+                <dt className="text-sm text-slate-500">
+                  Live nearby results count
+                </dt>
+                <dd className="text-sm font-semibold text-emerald-300">
+                  {liveResources.length}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-5 py-4">
+                <dt className="text-sm text-slate-500">
+                  Total displayed count
+                </dt>
                 <dd className="text-sm font-semibold text-emerald-300">
                   {displayedResources.length}
                 </dd>

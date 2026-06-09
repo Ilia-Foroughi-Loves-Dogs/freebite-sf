@@ -3,7 +3,12 @@ export type ResourceCategory =
   | "Free hot meals"
   | "Community fridge"
   | "Student food resource"
-  | "Nearby food place";
+  | "Nearby food place"
+  | "Restaurant"
+  | "Fast food"
+  | "Cafe"
+  | "Supermarket"
+  | "Convenience store";
 
 export type CheapMenuItem = {
   name: string;
