@@ -48,8 +48,21 @@ export function ResourceCard({
       : openStatus === false
         ? "Closed now"
         : "Hours unknown";
-  const supportsMenuPrices = resource.source === "osm";
-  const canCheckMenu = supportsMenuPrices && Boolean(resource.menuUrl);
+  const canCheckMenu = Boolean(resource.menuUrl);
+  const cheapestItems = [...(resource.cheapestItems ?? [])]
+    .filter((item) => Number.isFinite(item.price))
+    .sort((a, b) => a.price - b.price)
+    .slice(0, 3);
+  const lowestItem = cheapestItems[0];
+  const isFree =
+    resource.costRank === 0 || resource.cost.trim().toLowerCase() === "free";
+  const priceBadge = isFree
+    ? "Free"
+    : lowestItem
+      ? `From ${lowestItem.priceText || `$${lowestItem.price.toFixed(2)}`}`
+      : resource.cost.trim().toLowerCase() === "unknown"
+        ? "Price unknown"
+        : null;
   const menuCheckedDate = resource.menuLastChecked
     ? new Intl.DateTimeFormat("en-US", {
         dateStyle: "medium",
@@ -127,6 +140,19 @@ export function ResourceCard({
             Verified
           </span>
         )}
+        {priceBadge && (
+          <span
+            className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold ${
+              isFree
+                ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-200"
+                : lowestItem
+                  ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
+                  : "border-slate-400/20 bg-slate-400/10 text-slate-300"
+            }`}
+          >
+            {priceBadge}
+          </span>
+        )}
       </div>
 
       <div className="mt-5 flex gap-3 border-b border-white/10 pb-5">
@@ -201,16 +227,13 @@ export function ResourceCard({
         </div>
       </dl>
 
-      {supportsMenuPrices &&
-        (canCheckMenu || resource.cheapestItems?.length || resource.menuStatus) && (
+      {(canCheckMenu || cheapestItems.length > 0 || resource.menuStatus) && (
         <div className="mb-5 border-t border-white/10 pt-5">
-          {resource.cheapestItems && resource.cheapestItems.length > 0 ? (
+          {cheapestItems.length > 0 ? (
             <div>
-              <p className="text-sm font-semibold text-white">
-                Cheapest items found online
-              </p>
+              <p className="text-sm font-semibold text-white">Cheapest items</p>
               <ul className="mt-3 space-y-3">
-                {resource.cheapestItems.map((item) => (
+                {cheapestItems.map((item) => (
                   <li
                     className="rounded-xl border border-emerald-300/10 bg-emerald-300/[0.04] px-3 py-2.5 text-sm"
                     key={`${item.name}-${item.price}-${item.sourceUrl}`}
@@ -220,18 +243,20 @@ export function ResourceCard({
                         {item.name}
                       </span>
                       <span className="font-semibold text-emerald-300">
-                        ${item.price.toFixed(2)}
+                        {item.priceText || `$${item.price.toFixed(2)}`}
                       </span>
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                      <a
-                        className="text-emerald-200 underline decoration-emerald-300/40 underline-offset-2 hover:text-emerald-100"
-                        href={item.sourceUrl}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        Source
-                      </a>
+                      {item.sourceUrl !== "manual-seed" && (
+                        <a
+                          className="text-emerald-200 underline decoration-emerald-300/40 underline-offset-2 hover:text-emerald-100"
+                          href={item.sourceUrl}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          Source
+                        </a>
+                      )}
                       <span className="text-amber-200">
                         Verify before going
                       </span>
@@ -240,7 +265,11 @@ export function ResourceCard({
                 ))}
               </ul>
               <p className="mt-3 text-xs leading-5 text-slate-500">
-                Prices may be outdated. Verify before going.
+                {cheapestItems.some(
+                  (item) => item.sourceUrl === "manual-seed",
+                )
+                  ? "Example cheap items — verify before going."
+                  : "Prices may be outdated. Verify before going."}
                 {menuCheckedDate && ` Last checked ${menuCheckedDate}.`}
               </p>
             </div>

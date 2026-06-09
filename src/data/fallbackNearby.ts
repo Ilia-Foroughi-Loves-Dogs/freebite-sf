@@ -17,6 +17,14 @@ export const fallbackNearbyResources: FoodResource[] = [
     lng: -122.4176,
     tags: ["sandwiches", "Vietnamese"],
     source: "fallback",
+    cheapestItems: [
+      {
+        name: "Banh mi",
+        price: 5.5,
+        priceText: "$5.50",
+        sourceUrl: "manual-seed",
+      },
+    ],
   },
   {
     id: "fallback-brendas-french-soul-food",
@@ -34,6 +42,20 @@ export const fallbackNearbyResources: FoodResource[] = [
     lng: -122.4192,
     tags: ["restaurant", "Creole"],
     source: "fallback",
+    cheapestItems: [
+      {
+        name: "Donut",
+        price: 3.25,
+        priceText: "$3.25",
+        sourceUrl: "manual-seed",
+      },
+      {
+        name: "Egg sandwich",
+        price: 7.5,
+        priceText: "$7.50",
+        sourceUrl: "manual-seed",
+      },
+    ],
   },
   {
     id: "fallback-philz-civic-center",
@@ -51,6 +73,20 @@ export const fallbackNearbyResources: FoodResource[] = [
     lng: -122.4207,
     tags: ["cafe", "coffee"],
     source: "fallback",
+    cheapestItems: [
+      {
+        name: "Coffee",
+        price: 3.5,
+        priceText: "$3.50",
+        sourceUrl: "manual-seed",
+      },
+      {
+        name: "Pastry",
+        price: 4.25,
+        priceText: "$4.25",
+        sourceUrl: "manual-seed",
+      },
+    ],
   },
   {
     id: "fallback-the-market",
@@ -68,6 +104,20 @@ export const fallbackNearbyResources: FoodResource[] = [
     lng: -122.4164,
     tags: ["supermarket", "groceries"],
     source: "fallback",
+    cheapestItems: [
+      {
+        name: "Bagel",
+        price: 1.5,
+        priceText: "$1.50",
+        sourceUrl: "manual-seed",
+      },
+      {
+        name: "Hot dog",
+        price: 3.99,
+        priceText: "$3.99",
+        sourceUrl: "manual-seed",
+      },
+    ],
   },
   {
     id: "fallback-cafe-international",
@@ -85,6 +135,20 @@ export const fallbackNearbyResources: FoodResource[] = [
     lng: -122.4308,
     tags: ["cafe", "coffee"],
     source: "fallback",
+    cheapestItems: [
+      {
+        name: "Coffee",
+        price: 2.5,
+        priceText: "$2.50",
+        sourceUrl: "manual-seed",
+      },
+      {
+        name: "Bagel",
+        price: 3.75,
+        priceText: "$3.75",
+        sourceUrl: "manual-seed",
+      },
+    ],
   },
   {
     id: "fallback-super-duper-market",
@@ -102,6 +166,20 @@ export const fallbackNearbyResources: FoodResource[] = [
     lng: -122.4335,
     tags: ["burgers", "fast food"],
     source: "fallback",
+    cheapestItems: [
+      {
+        name: "Fries",
+        price: 4.25,
+        priceText: "$4.25",
+        sourceUrl: "manual-seed",
+      },
+      {
+        name: "Burger",
+        price: 8.5,
+        priceText: "$8.50",
+        sourceUrl: "manual-seed",
+      },
+    ],
   },
   {
     id: "fallback-trader-joes-hyde",
@@ -119,6 +197,20 @@ export const fallbackNearbyResources: FoodResource[] = [
     lng: -122.4175,
     tags: ["supermarket", "groceries"],
     source: "fallback",
+    cheapestItems: [
+      {
+        name: "Burrito",
+        price: 3.99,
+        priceText: "$3.99",
+        sourceUrl: "manual-seed",
+      },
+      {
+        name: "Pastry",
+        price: 1.49,
+        priceText: "$1.49",
+        sourceUrl: "manual-seed",
+      },
+    ],
   },
   {
     id: "fallback-pinecrest-diner",
@@ -136,5 +228,19 @@ export const fallbackNearbyResources: FoodResource[] = [
     lng: -122.4098,
     tags: ["restaurant", "diner"],
     source: "fallback",
+    cheapestItems: [
+      {
+        name: "Coffee",
+        price: 3.25,
+        priceText: "$3.25",
+        sourceUrl: "manual-seed",
+      },
+      {
+        name: "Egg sandwich",
+        price: 8.95,
+        priceText: "$8.95",
+        sourceUrl: "manual-seed",
+      },
+    ],
   },
 ];

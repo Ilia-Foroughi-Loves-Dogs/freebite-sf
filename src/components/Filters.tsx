@@ -5,16 +5,11 @@ export type ResourceFilter =
   | "Free hot meals"
   | "Community fridges"
   | "Student resources"
-  | "Nearby food places"
   | "Nearby restaurants"
-  | "Cheap/unknown nearby food"
-  | "Has menu prices";
+  | "Has cheap items"
+  | "Unknown price";
 
-export type SortOption =
-  | "Closest"
-  | "Cheapest"
-  | "Free first"
-  | "Cheapest menu item";
+export type SortOption = "Closest" | "Cheapest food" | "Free first";
 
 const filters: ResourceFilter[] = [
   "All",
@@ -23,18 +18,12 @@ const filters: ResourceFilter[] = [
   "Free hot meals",
   "Community fridges",
   "Student resources",
-  "Nearby food places",
   "Nearby restaurants",
-  "Cheap/unknown nearby food",
-  "Has menu prices",
+  "Has cheap items",
+  "Unknown price",
 ];
 
-const sorts: SortOption[] = [
-  "Closest",
-  "Cheapest",
-  "Free first",
-  "Cheapest menu item",
-];
+const sorts: SortOption[] = ["Closest", "Cheapest food", "Free first"];
 
 type FiltersProps = {
   activeFilter: ResourceFilter;
